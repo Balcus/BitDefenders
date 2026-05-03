@@ -1,10 +1,6 @@
-use crate::types::{EnemySide, GameConfig, GameState, Hero, MoveArgs, Projectile, ShootArgs, Wall};
-
-#[derive(Debug, Clone)]
-pub enum Action {
-    Move(MoveArgs),
-    Shoot(ShootArgs),
-}
+use crate::types::{
+    Action, EnemySide, GameConfig, GameState, Hero, MoveArgs, Projectile, ShootArgs, Wall,
+};
 
 const POSSIBLE_MOVES: [(i32, i32); 9] = [
     (0, 0),
@@ -18,6 +14,28 @@ const POSSIBLE_MOVES: [(i32, i32); 9] = [
     (-1, -1),
 ];
 
+const MIN_SCORE: i32 = i32::MIN;
+const MOVE_INTO_WALL_PENALTY: i32 = 25;
+const HIT_BY_PROJECTILE_PENALTY: i32 = 500;
+const DONT_MOVE_PENALTY: i32 = 25;
+const SHOOT_SCORE: i32 = 450;
+const CLOSE_TOGHETER_BONUS: i32 = 0;
+
+pub struct Tile {
+    _x: i32,
+    _y: i32,
+}
+
+pub struct EvalContext<'a> {
+    hero: &'a Hero,
+    _enemeies: &'a [&'a Hero],
+    allies: &'a [&'a Hero],
+    walls: &'a [Wall],
+    projectiles: &'a [Projectile],
+    config: &'a GameConfig,
+    enemy_side: Option<EnemySide>,
+}
+
 pub fn decide_actions(
     player_id: i32,
     config: &GameConfig,
@@ -30,6 +48,7 @@ pub fn decide_actions(
         .iter()
         .filter(|h| h.owner_id == player_id)
         .collect();
+
     let enemies: Vec<&Hero> = state
         .heroes
         .iter()
@@ -39,7 +58,23 @@ pub fn decide_actions(
     let mut actions = Vec::new();
 
     for hero in heroes {
-        let mut max_score = i32::MIN;
+        let allies: Vec<&Hero> = state
+            .heroes
+            .iter()
+            .filter(|h| h.owner_id == player_id && h.id != hero.id)
+            .collect();
+
+        let eval_context = EvalContext {
+            hero,
+            _enemeies: &enemies,
+            allies: &allies,
+            walls: &state.walls,
+            projectiles: &state.projectiles,
+            config,
+            enemy_side,
+        };
+
+        let mut max_score = MIN_SCORE;
 
         let mut best_action = Action::Move(MoveArgs {
             hero_id: hero.id,
@@ -48,8 +83,16 @@ pub fn decide_actions(
         });
 
         if hero.cooldown == 0 {
-            for _enemy in &enemies {
-                // TODO: soothing
+            for enemy in &enemies {
+                let score = SHOOT_SCORE;
+                if score > max_score {
+                    max_score = score;
+                    best_action = Action::Shoot(ShootArgs {
+                        hero_id: hero.id,
+                        x: enemy.x,
+                        y: enemy.y,
+                    });
+                }
             }
         }
 
@@ -57,30 +100,9 @@ pub fn decide_actions(
             let target_x = hero.x + (dx * 3);
             let target_y = hero.y + (dy * 3);
 
-            if is_valid_move(target_x, target_y, config, &state.walls) {
-                let immediate = eval_pos(
-                    target_x,
-                    target_y,
-                    hero,
-                    &enemies,
-                    &state.walls,
-                    &state.projectiles,
-                    config,
-                    enemy_side,
-                );
-
-                let future = best_reachable_score(
-                    target_x,
-                    target_y,
-                    hero,
-                    &enemies,
-                    &state.walls,
-                    &state.projectiles,
-                    config,
-                    enemy_side,
-                    3,
-                );
-
+            if is_valid_move(target_x, target_y, &eval_context) {
+                let immediate = eval_pos(target_x, target_y, &eval_context);
+                let future = best_reachable_score(target_x, target_y, &eval_context, 3);
                 let score = immediate + future;
 
                 if score > max_score {
@@ -98,46 +120,17 @@ pub fn decide_actions(
     actions
 }
 
-fn best_reachable_score(
-    tx: i32,
-    ty: i32,
-    hero: &Hero,
-    enemies: &Vec<&Hero>,
-    walls: &Vec<Wall>,
-    projectiles: &Vec<Projectile>,
-    config: &GameConfig,
-    enemy_side: Option<EnemySide>,
-    depth: u32,
-) -> i32 {
+fn best_reachable_score(tx: i32, ty: i32, ctx: &EvalContext, depth: u32) -> i32 {
     let mut best = i32::MIN;
 
     for (dx, dy) in POSSIBLE_MOVES {
         let nx = tx + (dx * 3);
         let ny = ty + (dy * 3);
 
-        if is_valid_move(nx, ny, config, walls) {
-            let immediate = eval_pos(
-                nx,
-                ny,
-                hero,
-                enemies,
-                walls,
-                projectiles,
-                config,
-                enemy_side,
-            );
+        if is_valid_move(nx, ny, ctx) {
+            let immediate = eval_pos(nx, ny, ctx);
             let future = if depth > 0 {
-                best_reachable_score(
-                    nx,
-                    ny,
-                    hero,
-                    enemies,
-                    walls,
-                    projectiles,
-                    config,
-                    enemy_side,
-                    depth - 1,
-                )
+                best_reachable_score(nx, ny, ctx, depth - 1)
             } else {
                 0
             };
@@ -151,55 +144,57 @@ fn best_reachable_score(
     if best == i32::MIN { -1000 } else { best }
 }
 
-fn is_valid_move(tx: i32, ty: i32, config: &GameConfig, walls: &Vec<Wall>) -> bool {
-    ty < config.height
+fn is_valid_move(tx: i32, ty: i32, ctx: &EvalContext) -> bool {
+    ty < ctx.config.height
         && ty > -1
-        && tx < config.width
+        && tx < ctx.config.width
         && tx > -1
-        && !walls
+        && !ctx
+            .walls
             .iter()
             .any(|w| (tx - w.x).abs() < 2 && (ty - w.y).abs() < 2)
 }
 
-fn eval_pos(
-    tx: i32,
-    ty: i32,
-    hero: &Hero,
-    _enemies: &Vec<&Hero>,
-    walls: &Vec<Wall>,
-    projectiles: &Vec<Projectile>,
-    config: &GameConfig,
-    enemy_side: Option<EnemySide>,
-) -> i32 {
+fn eval_pos(tx: i32, ty: i32, ctx: &EvalContext) -> i32 {
     let mut score = 0;
 
-    // this needs to be calculated only once at the start of the round, else they will just be stuck in the middle...
-    let enemy_side_y = match enemy_side {
+    let enemy_side_y = match ctx.enemy_side {
         Some(side) => match side {
-            EnemySide::Bottom => config.height,
+            EnemySide::Bottom => ctx.config.height,
             EnemySide::Top => 0,
         },
         None => 0,
     };
 
-    score += (config.height - (ty - enemy_side_y).abs()) * 10;
+    // move towards the enemy side
+    score += (ctx.config.height - (ty - enemy_side_y).abs()) / 2;
 
-    if hero.x == tx && hero.y == ty {
-        score -= 10;
+    // prevent standing still
+    if ctx.hero.x == tx && ctx.hero.y == ty {
+        score -= DONT_MOVE_PENALTY;
     }
 
-    if walls
+    // try staying close to ally
+    for ally in ctx.allies {
+        let dist = (tx - ally.x).abs() + (ty - ally.y).abs();
+        if dist <= 30 {
+            score += CLOSE_TOGHETER_BONUS;
+        }
+    }
+
+    if ctx
+        .walls
         .iter()
         .any(|w| (tx - w.x).abs() < 2 && (ty - w.y).abs() < 2)
     {
         // do not move into a wall
-        score -= 500;
+        score -= MOVE_INTO_WALL_PENALTY;
     }
 
-    for p in projectiles {
+    for p in ctx.projectiles {
         if (tx - p.x).abs() < 3 && (ty - p.y).abs() < 3 {
             // aslo don t get hit
-            score -= 500;
+            score -= HIT_BY_PROJECTILE_PENALTY;
         }
     }
 

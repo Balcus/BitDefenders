@@ -1,8 +1,10 @@
 use anyhow::Context;
 use bitdefender::{
-    play::{Action, decide_actions},
+    play::decide_actions,
     protocol::{Command, WebSocketMessage, send_command},
-    types::{self, EndMatchArgs, EnemySide, Hero, LoginArgs, StartMatchArgs, StartTurnArgs},
+    types::{
+        self, Action, EndMatchArgs, EnemySide, Hero, LoginArgs, StartMatchArgs, StartTurnArgs,
+    },
 };
 use futures_util::{SinkExt, StreamExt};
 use tokio_tungstenite::{connect_async, tungstenite::Message};
@@ -100,7 +102,6 @@ async fn main() -> anyhow::Result<()> {
                     enemy_side.clone(),
                 );
 
-                // Construiești toate mesajele mai întâi
                 let messages: Vec<Message> = actions
                     .into_iter()
                     .filter_map(|action| {
@@ -116,7 +117,6 @@ async fn main() -> anyhow::Result<()> {
                     })
                     .collect();
 
-                // Trimiți toate deodată
                 write
                     .send_all(&mut futures_util::stream::iter(messages).map(Ok))
                     .await?;
@@ -127,6 +127,7 @@ async fn main() -> anyhow::Result<()> {
                     serde_json::from_value(envelope.args).context("parse END_MATCH")?;
                 println!("END_MATCH  reason={} winner={:?}", args.reason, args.winner);
                 match_config = None;
+                send_command(&mut write, WebSocketMessage::empty(Command::Practice)).await?;
             }
 
             Command::Error => {

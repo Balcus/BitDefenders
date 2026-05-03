@@ -6,10 +6,16 @@ use std::collections::HashMap;
 
 use serde::{Deserialize, Serialize};
 
+#[derive(Debug, Clone)]
+pub enum Action {
+    Move(MoveArgs),
+    Shoot(ShootArgs),
+}
+
 #[derive(Clone, Debug, Copy)]
 pub enum EnemySide {
     Top,
-    Bottom
+    Bottom,
 }
 
 pub const PROTOCOL_VERSION: i32 = 1;
