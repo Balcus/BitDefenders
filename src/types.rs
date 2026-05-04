@@ -151,6 +151,7 @@ pub struct MoveArgs {
     pub hero_id: i32,
     pub x: i32,
     pub y: i32,
+    pub comment: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -158,6 +159,7 @@ pub struct ShootArgs {
     pub hero_id: i32,
     pub x: i32,
     pub y: i32,
+    pub comment: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

@@ -1,5 +1,6 @@
 use anyhow::Context;
 use bitdefender::{
+    grid::Grid,
     play::decide_actions,
     protocol::{Command, WebSocketMessage, send_command},
     types::{
@@ -21,6 +22,7 @@ async fn main() -> anyhow::Result<()> {
     let mut match_config: Option<types::GameConfig> = None;
 
     let mut enemy_side: Option<EnemySide> = None;
+    let mut grid = Grid::default();
 
     println!("Connected to {SERVER_URL}");
 
@@ -61,6 +63,7 @@ async fn main() -> anyhow::Result<()> {
 
             Command::Ready => {
                 println!("READY — requesting practice match");
+                // send_command(&mut write, WebSocketMessage::empty(Command::Challenge)).await?;
                 send_command(&mut write, WebSocketMessage::empty(Command::Practice)).await?;
             }
 
@@ -68,9 +71,11 @@ async fn main() -> anyhow::Result<()> {
                 let args: StartMatchArgs =
                     serde_json::from_value(envelope.args).context("parse START_MATCH")?;
                 println!(
-                    "START_MATCH  match_id={} you=player{}",
-                    args.match_id, args.your_player_id
+                    "START_MATCH  match_id={} you=player{}, width={}, height={}",
+                    args.match_id, args.your_player_id, args.config.width, args.config.height
                 );
+
+                grid = Grid::from(args.config.width, args.config.height, &args.state.walls);
 
                 let my_heroes: Vec<&Hero> = args
                     .state
@@ -94,12 +99,14 @@ async fn main() -> anyhow::Result<()> {
                 println!("turn={}", args.turn);
 
                 let config = match_config.as_ref().expect("config set by START_MATCH");
+
                 let actions = decide_actions(
                     player_id,
                     config,
                     &args.state,
                     args.turn,
                     enemy_side.clone(),
+                    &mut grid,
                 );
 
                 let messages: Vec<Message> = actions
@@ -142,7 +149,11 @@ async fn main() -> anyhow::Result<()> {
                 }
             }
 
-            Command::Login | Command::Practice | Command::Move | Command::Shoot => {
+            Command::Login
+            | Command::Practice
+            | Command::Move
+            | Command::Shoot
+            | Command::Challenge => {
                 eprintln!("Unexpected command from server: {:?}", envelope.command);
             }
         }

@@ -1,6 +1,7 @@
 use anyhow::Context;
 use futures_util::SinkExt;
 use serde::{Deserialize, Serialize};
+use serde_json::json;
 use tokio_tungstenite::tungstenite::Message;
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -16,6 +17,7 @@ pub enum Command {
     Move,
     Shoot,
     EndMatch,
+    Challenge,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -28,7 +30,7 @@ impl WebSocketMessage {
     pub fn empty(command: Command) -> Self {
         Self {
             command,
-            args: serde_json::Value::Null,
+            args: json!({}),
         }
     }
 

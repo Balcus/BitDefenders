@@ -1,5 +1,8 @@
-use crate::types::{
-    Action, EnemySide, GameConfig, GameState, Hero, MoveArgs, Projectile, ShootArgs, Wall,
+use crate::{
+    grid::Grid,
+    types::{
+        Action, EnemySide, GameConfig, GameState, Hero, MoveArgs, Projectile, ShootArgs, Wall,
+    },
 };
 
 const POSSIBLE_MOVES: [(i32, i32); 9] = [
@@ -20,11 +23,7 @@ const HIT_BY_PROJECTILE_PENALTY: i32 = 500;
 const DONT_MOVE_PENALTY: i32 = 25;
 const SHOOT_SCORE: i32 = 450;
 const CLOSE_TOGHETER_BONUS: i32 = 0;
-
-pub struct Tile {
-    _x: i32,
-    _y: i32,
-}
+const EXPLORATION_BONUS: i32 = 50;
 
 pub struct EvalContext<'a> {
     hero: &'a Hero,
@@ -34,6 +33,7 @@ pub struct EvalContext<'a> {
     projectiles: &'a [Projectile],
     config: &'a GameConfig,
     enemy_side: Option<EnemySide>,
+    grid: &'a Grid,
 }
 
 pub fn decide_actions(
@@ -42,6 +42,7 @@ pub fn decide_actions(
     state: &GameState,
     _turn: i32,
     enemy_side: Option<EnemySide>,
+    grid: &mut Grid,
 ) -> Vec<Action> {
     let heroes: Vec<&Hero> = state
         .heroes
@@ -72,6 +73,7 @@ pub fn decide_actions(
             projectiles: &state.projectiles,
             config,
             enemy_side,
+            grid,
         };
 
         let mut max_score = MIN_SCORE;
@@ -80,6 +82,7 @@ pub fn decide_actions(
             hero_id: hero.id,
             x: hero.x,
             y: hero.y,
+            comment: Some(String::from("Shooting")),
         });
 
         if hero.cooldown == 0 {
@@ -91,6 +94,7 @@ pub fn decide_actions(
                         hero_id: hero.id,
                         x: enemy.x,
                         y: enemy.y,
+                        comment: Some(String::from("Shooting")),
                     });
                 }
             }
@@ -111,9 +115,17 @@ pub fn decide_actions(
                         hero_id: hero.id,
                         x: target_x,
                         y: target_y,
+                        comment: Some(String::from("Moving")),
                     });
                 }
             }
+        }
+
+        match &best_action {
+            Action::Move(args) => {
+                grid.tiles[args.x as usize][args.y as usize].should_consider = false;
+            }
+            _ => {}
         }
         actions.push(best_action);
     }
@@ -166,8 +178,12 @@ fn eval_pos(tx: i32, ty: i32, ctx: &EvalContext) -> i32 {
         None => 0,
     };
 
-    // move towards the enemy side
-    score += (ctx.config.height - (ty - enemy_side_y).abs()) / 2;
+    if ctx.grid.tiles[tx as usize][ty as usize].should_consider {
+        score += EXPLORATION_BONUS;
+    }
+
+    // encourage moving towards the enemy side
+    score += (ctx.config.height - (ty - enemy_side_y).abs()) / 5;
 
     // prevent standing still
     if ctx.hero.x == tx && ctx.hero.y == ty {
