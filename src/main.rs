@@ -149,11 +149,7 @@ async fn main() -> anyhow::Result<()> {
                 }
             }
 
-            Command::Login
-            | Command::Practice
-            | Command::Move
-            | Command::Shoot
-            | Command::Challenge => {
+            _ => {
                 eprintln!("Unexpected command from server: {:?}", envelope.command);
             }
         }

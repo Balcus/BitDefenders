@@ -24,6 +24,7 @@ const DONT_MOVE_PENALTY: i32 = 25;
 const SHOOT_SCORE: i32 = 450;
 const CLOSE_TOGHETER_BONUS: i32 = 0;
 const EXPLORATION_BONUS: i32 = 50;
+const ENEMY_SEES_U_PENALTY: i32 = 100;
 
 pub struct EvalContext<'a> {
     hero: &'a Hero,
@@ -34,6 +35,49 @@ pub struct EvalContext<'a> {
     config: &'a GameConfig,
     enemy_side: Option<EnemySide>,
     grid: &'a Grid,
+}
+
+fn bresenham_line(x0: i32, y0: i32, x1: i32, y1: i32) -> Vec<(i32, i32)> {
+    let mut points = Vec::new();
+    let dx = (x1 - x0).abs();
+    let dy = -(y1 - y0).abs();
+    let sx: i32 = if x0 < x1 { 1 } else { -1 };
+    let sy: i32 = if y0 < y1 { 1 } else { -1 };
+    let mut err = dx + dy;
+    let (mut x, mut y) = (x0, y0);
+
+    loop {
+        points.push((x, y));
+        if x == x1 && y == y1 {
+            break;
+        }
+        let e2 = 2 * err;
+        if e2 >= dy {
+            err += dy;
+            x += sx;
+        }
+        if e2 <= dx {
+            err += dx;
+            y += sy;
+        }
+    }
+
+    points
+}
+
+fn has_line_of_sight(x0: i32, y0: i32, x1: i32, y1: i32, walls: &[Wall]) -> bool {
+    let line = bresenham_line(x0, y0, x1, y1);
+
+    for (x, y) in line.iter().skip(1).take(line.len().saturating_sub(2)) {
+        if walls
+            .iter()
+            .any(|w| (x - w.x).abs() < 2 && (y - w.y).abs() < 2)
+        {
+            return false;
+        }
+    }
+
+    true
 }
 
 pub fn decide_actions(
@@ -82,20 +126,22 @@ pub fn decide_actions(
             hero_id: hero.id,
             x: hero.x,
             y: hero.y,
-            comment: Some(String::from("Shooting")),
+            comment: None,
         });
 
         if hero.cooldown == 0 {
             for enemy in &enemies {
-                let score = SHOOT_SCORE;
-                if score > max_score {
-                    max_score = score;
-                    best_action = Action::Shoot(ShootArgs {
-                        hero_id: hero.id,
-                        x: enemy.x,
-                        y: enemy.y,
-                        comment: Some(String::from("Shooting")),
-                    });
+                if has_line_of_sight(hero.x, hero.y, enemy.x, enemy.y, &state.walls) {
+                    let score = SHOOT_SCORE;
+                    if score > max_score {
+                        max_score = score;
+                        best_action = Action::Shoot(ShootArgs {
+                            hero_id: hero.id,
+                            x: enemy.x,
+                            y: enemy.y,
+                            comment: Some(String::from("Phew 💥")),
+                        });
+                    }
                 }
             }
         }
@@ -115,7 +161,7 @@ pub fn decide_actions(
                         hero_id: hero.id,
                         x: target_x,
                         y: target_y,
-                        comment: Some(String::from("Moving")),
+                        comment: Some(String::from("Moving 🏃‍♂️")),
                     });
                 }
             }
@@ -211,6 +257,12 @@ fn eval_pos(tx: i32, ty: i32, ctx: &EvalContext) -> i32 {
         if (tx - p.x).abs() < 3 && (ty - p.y).abs() < 3 {
             // aslo don t get hit
             score -= HIT_BY_PROJECTILE_PENALTY;
+        }
+    }
+
+    for enemy in ctx._enemeies {
+        if has_line_of_sight(tx, ty, enemy.x, enemy.y, ctx.walls) {
+            score -= ENEMY_SEES_U_PENALTY;
         }
     }
 
