@@ -22,9 +22,10 @@ const MOVE_INTO_WALL_PENALTY: i32 = 25;
 const HIT_BY_PROJECTILE_PENALTY: i32 = 500;
 const DONT_MOVE_PENALTY: i32 = 25;
 const SHOOT_SCORE: i32 = 450;
-const CLOSE_TOGHETER_BONUS: i32 = 0;
+const CLOSE_TOGETHER_BONUS: i32 = 30;
 const EXPLORATION_BONUS: i32 = 50;
-const ENEMY_SEES_U_PENALTY: i32 = 100;
+const ENEMY_SEES_U_PENALTY: i32 = 40;
+const APPROACH_ENEMY_WEIGHT: i32 = 1;
 
 pub struct EvalContext<'a> {
     hero: &'a Hero,
@@ -228,19 +229,16 @@ fn eval_pos(tx: i32, ty: i32, ctx: &EvalContext) -> i32 {
         score += EXPLORATION_BONUS;
     }
 
-    // encourage moving towards the enemy side
     score += (ctx.config.height - (ty - enemy_side_y).abs()) / 5;
 
-    // prevent standing still
     if ctx.hero.x == tx && ctx.hero.y == ty {
         score -= DONT_MOVE_PENALTY;
     }
 
-    // try staying close to ally
     for ally in ctx.allies {
         let dist = (tx - ally.x).abs() + (ty - ally.y).abs();
         if dist <= 30 {
-            score += CLOSE_TOGHETER_BONUS;
+            score += CLOSE_TOGETHER_BONUS;
         }
     }
 
@@ -249,13 +247,11 @@ fn eval_pos(tx: i32, ty: i32, ctx: &EvalContext) -> i32 {
         .iter()
         .any(|w| (tx - w.x).abs() < 2 && (ty - w.y).abs() < 2)
     {
-        // do not move into a wall
         score -= MOVE_INTO_WALL_PENALTY;
     }
 
     for p in ctx.projectiles {
         if (tx - p.x).abs() < 3 && (ty - p.y).abs() < 3 {
-            // aslo don t get hit
             score -= HIT_BY_PROJECTILE_PENALTY;
         }
     }
@@ -264,7 +260,15 @@ fn eval_pos(tx: i32, ty: i32, ctx: &EvalContext) -> i32 {
         if has_line_of_sight(tx, ty, enemy.x, enemy.y, ctx.walls) {
             score -= ENEMY_SEES_U_PENALTY;
         }
+        score -= distance(tx, ty, enemy.x, enemy.y) * APPROACH_ENEMY_WEIGHT;
     }
 
     score
+}
+
+fn distance(tx: i32, ty: i32, ex: i32, ey: i32) -> i32 {
+    let dx = ex - tx;
+    let dy = ey - ty;
+    let s = dx.pow(2) + dy.pow(2);
+    s.isqrt()
 }
