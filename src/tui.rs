@@ -1,3 +1,11 @@
+use crate::{
+    ai::{decide_actions, grid::Grid},
+    protocol::{Command, WebSocketMessage, send_command},
+    types::{
+        self, Action, ChallengeArgs, EndMatchArgs, EnemySide, Hero, LoginArgs, StartMatchArgs,
+        StartTurnArgs,
+    },
+};
 use anyhow::Context;
 use crossterm::event::{Event, KeyCode, KeyEvent, KeyEventKind};
 use futures::{SinkExt, StreamExt, stream::SplitSink};
@@ -12,16 +20,6 @@ use std::fmt;
 use tokio::net::TcpStream;
 use tokio::sync::mpsc;
 use tokio_tungstenite::{MaybeTlsStream, WebSocketStream, connect_async, tungstenite::Message};
-
-use crate::{
-    grid::Grid,
-    play::decide_actions,
-    protocol::{Command, WebSocketMessage, send_command},
-    types::{
-        self, Action, ChallengeArgs, EndMatchArgs, EnemySide, Hero, LoginArgs, StartMatchArgs,
-        StartTurnArgs,
-    },
-};
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum MenuOption {

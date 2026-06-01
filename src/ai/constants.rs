@@ -1,0 +1,17 @@
+pub const MOVE_INTO_WALL_PENALTY: i32 = 50;
+pub const HIT_BY_PROJECTILE_PENALTY: i32 = 600;
+pub const FUTURE_PROJECTILE_PENALTY: i32 = 300;
+pub const DONT_MOVE_PENALTY: i32 = 20;
+pub const SHOOT_SCORE: i32 = 500;
+pub const SHOOT_LOW_HP_BONUS: i32 = 100;
+pub const CLOSE_TOGETHER_BONUS: i32 = 25;
+pub const ALLY_CLUSTER_DIST: i32 = 30;
+pub const EXPLORATION_BONUS: i32 = 40;
+pub const ENEMY_SEES_U_PENALTY: i32 = 60;
+pub const LOW_HP_EXPOSURE_PENALTY: i32 = 80;
+pub const APPROACH_ENEMY_WEIGHT: i32 = 2;
+pub const HAVE_LOS_ON_ENEMY_BONUS: i32 = 35;
+pub const READY_TO_SHOOT_BONUS: i32 = 80;
+pub const IN_COVER_BONUS: i32 = 55;
+pub const LOOKAHEAD_DEPTH: u32 = 3;
+pub const LOW_HP_FRACTION: f32 = 0.45;
